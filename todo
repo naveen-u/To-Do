@@ -15,7 +15,6 @@ import json
 import os
 import datetime
 import re
-import emoji
 
 def makeBlankTodo():
 	'''
