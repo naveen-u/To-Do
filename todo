@@ -23,7 +23,7 @@ def makeBlankTodo():
 	with open(todoFile,'w') as file:
 		json.dump(todo,file)
 
-def printTodo(todoList, ids):
+def printTodo(todo, ids, verbose, searchTags):
 	'''
 	Prints the todo list.
 	'''
@@ -31,23 +31,38 @@ def printTodo(todoList, ids):
 	print("TO-DO LIST".center(os.get_terminal_size().columns))
 	print('='*os.get_terminal_size().columns)
 	print()
-	if len(todoList) == 0:
+	if len(todo['list']) == 0:
 		print('\tYour todo list is empty!')
 	else :
 		j = 1
 		for i in ids:
+			skip = False
+			if searchTags is not None:
+				for tag in searchTags:
+					tag = tag.lower()
+					if tag not in todo['tags'][i[1]]:
+						skip = True
+						break
+			if skip:
+				continue
 			if i[0] == 1:
-				print('    \u2757 \u2B50\t'+str(j) + ') ' + todoList[i[1]])
+				s = '    \u2757 \u2B50\t'
 			elif i[0] == 2:
-				print('    \u2757\t'+str(j) + ') ' + todoList[i[1]])
+				s = '    \u2757\t'
 			elif i[0] == 3:
-				print('      \u2B50\t'+str(j) + ') ' + todoList[i[1]])
+				s = '      \u2B50\t'
 			else:
-				print('\t'+str(j) + ') ' + todoList[i[1]])
+				s = '\t'
+			s += str(j) + ') '
+			if verbose and todo['tags'][i[1]] != []:
+				s += ', '.join(todo['tags'][i[1]])
+				s += ' : '
+			s += todo['list'][i[1]]
+			print(s)
 			j = j+1
 	print('\n')
 
-def addItem(todoFile, todo, item, priority):
+def addItem(todoFile, todo, item, priority, tags):
 	'''
 	Add item(s) to the todo list
 	'''
@@ -60,11 +75,15 @@ def addItem(todoFile, todo, item, priority):
 				timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
 				todo['list'][timestamp] = i
 				todo['priority'][timestamp] = priority
+				todo['tags'][timestamp] = []
+				if tags is not None:
+					todo['tags'][timestamp] = [x.lower() for x in tags]
+					todo['tags'][timestamp] = sorted(todo['tags'][timestamp])
 			json.dump(todo, jsonFile, indent=4)
 	except:
 		print('Oops! Something went wrong when adding that to your todo list.')
 
-def deleteItem(todoFile, todo, idx, ids):
+def deleteItem(todoFile, todo, idx, ids, delTags):
 	'''
 	Delete item(s) from todo list
 	'''
@@ -80,10 +99,7 @@ def deleteItem(todoFile, todo, idx, ids):
 	for part in idx:
 		try:
 			if '-' in part:
-				print(part)
 				a, b = part.split('-')
-				print(a)
-				print(b)
 				if representsInt(a) and representsInt(b):
 					a, b = int(a), int(b)
 					result.extend(range(a, b + 1))
@@ -99,14 +115,21 @@ def deleteItem(todoFile, todo, idx, ids):
 		except:
 			print('Oops! Something went wrong when processing '+ str(part) +'.')
 	idx = result
+	if delTags is not None:
+		for tag in delTags:
+			for i in range(len(ids)):
+				if tag in todo['tags'][ids[i][1]]:
+					if i+1 not in idx:
+						idx.append(i+1)
 	idx = sorted(idx, key=int, reverse=True)
 	for i in idx:
 		try:
 			i = int(i)
 			if i > length:
-				raise ValueError
+				continue
 			del(todo['list'][ids[i-1][1]])
 			del(todo['priority'][ids[i-1][1]])
+			del(todo['tags'][ids[i-1][1]])
 			del(ids[i-1])
 		except:
 	 		print('Oops! Something went wrong when deleting entry ' + str(i) +'.')
@@ -123,16 +146,20 @@ def representsInt(s):
 if __name__ == '__main__':
 	# Setting up command-line arguments
 	parser = argparse.ArgumentParser(prog = 'todo', description = 'Create and maintain a to-do list.')
-	parser.add_argument('-s', '--suppress', help = "Don't display todo-list after action.", action = 'store_true')
+	parser.add_argument('--suppress', '-s', help = "Don't display todo-list after action.", action = 'store_true')
+	parser.add_argument('--verbose', '-v', help = "Display tags along with items in todo-list.", action = 'store_true')	
+	parser.add_argument('--tag', '-t', nargs='*', help = 'Tag(s) to be searched for.', dest = 'tag_main')
 	subparsers = parser.add_subparsers(dest = 'command')
 
 	parser_a = subparsers.add_parser('add', help = 'Add new item(s) to to-do list.')
 	parser_a.add_argument('item', nargs='*', help = 'Item(s) to be added to to-do list.')
-	parser_a.add_argument('-u', '--urgent', help = "Flag the item as urgent.", action = 'store_true')
-	parser_a.add_argument('-i', '--important', help = "Flag the item as important.", action = 'store_true')
+	parser_a.add_argument('--urgent', '-u', help = "Flag the item as urgent.", action = 'store_true')
+	parser_a.add_argument('--important', '-i', help = "Flag the item as important.", action = 'store_true')
+	parser_a.add_argument('--tag', '-t', nargs='*', help = 'Tag(s) to be added to item(s).', dest = 'tag_add')
 
 	parser_d = subparsers.add_parser('del', help = 'Delete item(s) from to-do list.')
-	parser_d.add_argument('id', nargs='*', help='S.no(s). of item(s) to be deleted from to-do list.')	
+	parser_d.add_argument('id', nargs='*', help='S.no(s). of item(s) to be deleted from to-do list.')
+	parser_d.add_argument('--tag', '-t', nargs='*', help = 'Tag(s) to be deleted.', dest = 'tag_del')
 
 	parser_c = subparsers.add_parser('clear', help = 'Clear to-do list.')
 	
@@ -143,6 +170,7 @@ if __name__ == '__main__':
 	todo = {}
 	todo['list'] = {}
 	todo['priority'] = {}
+	todo['tags'] = {}
 	ids = []
 
 	# Check if todo file exists
@@ -168,7 +196,7 @@ if __name__ == '__main__':
 			priority -= 2
 		if args.important == True:
 			priority -= 1
-		addItem(todoFile, todo, args.item, priority)
+		addItem(todoFile, todo, args.item, priority, args.tag_add)
 
 	# Get IDs and sort
 	for i in todo['priority']:
@@ -177,9 +205,9 @@ if __name__ == '__main__':
 	ids = sorted(ids, key=lambda x: x[0])
 
 	# Delete item(s)
-	if args.command == 'del' and args.id != []:
-		deleteItem(todoFile, todo, args.id, ids)
+	if args.command == 'del' and (args.id != [] or args.tag_del != []):
+		deleteItem(todoFile, todo, args.id, ids, args.tag_del)
 
 	# Supress display after adding/deleting/clearing
 	if args.suppress is None or args.suppress is False:
-		printTodo(todo['list'], ids)
+		printTodo(todo, ids, args.verbose, args.tag_main)
