@@ -80,15 +80,19 @@ def deleteItem(todoFile, todo, idx, ids):
 	for part in idx:
 		try:
 			if '-' in part:
+				print(part)
 				a, b = part.split('-')
-				if(representsInt(a) and representsInt(b)):
+				print(a)
+				print(b)
+				if representsInt(a) and representsInt(b):
 					a, b = int(a), int(b)
 					result.extend(range(a, b + 1))
-				elif(representsInt(a)):
+				elif representsInt(a):
 					a = int(a)
 					result.append(a)
-				elif(representsInt(b)):
+				elif representsInt(b):
 					b = int(b)
+					result.append(b)
 			else:
 				a = int(part)
 				result.append(a)
@@ -144,7 +148,7 @@ if __name__ == '__main__':
 	# Check if todo file exists
 	if os.path.isfile(todoFile) is False:
 		makeBlankTodo()
-		
+
 	# Clear command
 	if args.command == 'clear':
 		makeBlankTodo()
