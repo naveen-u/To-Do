@@ -8,11 +8,14 @@
 #-------------------------------------------------------------------------------
 
 __author__ = 'Naveen Unnikrishnan'
-__version__ = 1.0
+__version__ = 1.2
 
 import argparse
 import json
 import os
+import datetime
+import re
+import emoji
 
 def makeBlankTodo():
 	'''
@@ -21,7 +24,7 @@ def makeBlankTodo():
 	with open(todoFile,'w') as file:
 		json.dump(todo,file)
 
-def printTodo(todoList):
+def printTodo(todoList, ids):
 	'''
 	Prints the todo list.
 	'''
@@ -32,38 +35,87 @@ def printTodo(todoList):
 	if len(todoList) == 0:
 		print('\tYour todo list is empty!')
 	else :
-		for item in todoList:
-			for i in item:
-				print('\t'+i + ') ' + item[i])
+		j = 1
+		for i in ids:
+			if i[0] == 1:
+				print('    \u2757 \u2B50\t'+str(j) + ') ' + todoList[i[1]])
+			elif i[0] == 2:
+				print('    \u2757\t'+str(j) + ') ' + todoList[i[1]])
+			elif i[0] == 3:
+				print('      \u2B50\t'+str(j) + ') ' + todoList[i[1]])
+			else:
+				print('\t'+str(j) + ') ' + todoList[i[1]])
+			j = j+1
 	print('\n')
 
-def addItem(todoFile, todo, item):
+def addItem(todoFile, todo, item, priority):
 	'''
-	Adds an item to the todo list
+	Add item(s) to the todo list
 	'''
 	try:
 		with open(todoFile,'w') as jsonFile:
-			todo['list'].append({str(len(todo['list'])+1):' '.join(item)})
+			item = ' '.join(item)
+			item = item.split('^')
+			for i in item:
+				i = i.strip()
+				timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
+				todo['list'][timestamp] = i
+				todo['priority'][timestamp] = priority
 			json.dump(todo, jsonFile, indent=4)
 	except:
 		print('Oops! Something went wrong when adding that to your todo list.')
 
-def deleteItem(todoFile, todo, idx):
+def deleteItem(todoFile, todo, idx, ids):
 	'''
-	Delete item from todo list
+	Delete item(s) from todo list
 	'''
 	length = len(todo['list'])
-	try:
-		if idx > length:
-			raise ValueError
-		with open(todoFile,'w') as jsonFile:
-			for i in range(idx-1,length-1):
-				todo['list'][i][str(i+1)] = todo['list'][i+1][str(i+2)]
-			del(todo['list'][length-1])
-			json.dump(todo, jsonFile, indent=4)
-	except:
-		print('Oops! Something went wrong when deleting that entry.')
+	idx = ' '.join(idx)
+	if re.search(r'[^\s0-9-]', idx) is not None:
+		x = input("Your contains characters that are not numbers, white spaces or dashes. Continuing might result in unexpected behaviour. Continue? [y/n]\t")
+		if(x == 'n'):
+			return
+	idx = re.split(r"[^-0-9]", idx)
+	idx = list(filter(None, idx))
+	result = []
+	for part in idx:
+		try:
+			if '-' in part:
+				a, b = part.split('-')
+				if(representsInt(a) and representsInt(b)):
+					a, b = int(a), int(b)
+					result.extend(range(a, b + 1))
+				elif(representsInt(a)):
+					a = int(a)
+					result.append(a)
+				elif(representsInt(b)):
+					b = int(b)
+			else:
+				a = int(part)
+				result.append(a)
+		except:
+			print('Oops! Something went wrong when processing '+ str(part) +'.')
+	idx = result
+	idx = sorted(idx, key=int, reverse=True)
+	for i in idx:
+		try:
+			i = int(i)
+			if i > length:
+				raise ValueError
+			del(todo['list'][ids[i-1][1]])
+			del(todo['priority'][ids[i-1][1]])
+			del(ids[i-1])
+		except:
+	 		print('Oops! Something went wrong when deleting entry ' + str(i) +'.')
+	with open(todoFile,'w') as jsonFile:
+		json.dump(todo, jsonFile, indent=4)
 
+def representsInt(s):
+    try: 
+        int(s)
+        return True
+    except ValueError:
+        return False
 
 if __name__ == '__main__':
 	# Setting up command-line arguments
@@ -71,11 +123,13 @@ if __name__ == '__main__':
 	parser.add_argument('-s', '--suppress', help = "Don't display todo-list after action.", action = 'store_true')
 	subparsers = parser.add_subparsers(dest = 'command')
 
-	parser_a = subparsers.add_parser('add', help = 'Add a new item to to-do list.')
-	parser_a.add_argument('item', nargs='*', help = 'Item to be added to to-do list.')
+	parser_a = subparsers.add_parser('add', help = 'Add new item(s) to to-do list.')
+	parser_a.add_argument('item', nargs='*', help = 'Item(s) to be added to to-do list.')
+	parser_a.add_argument('-u', '--urgent', help = "Flag the item as urgent.", action = 'store_true')
+	parser_a.add_argument('-i', '--important', help = "Flag the item as important.", action = 'store_true')
 
-	parser_d = subparsers.add_parser('del', help = 'Delete item from to-do list.')
-	parser_d.add_argument('id', type = int, help='S.No. of item to be deleted from to-do list.')	
+	parser_d = subparsers.add_parser('del', help = 'Delete item(s) from to-do list.')
+	parser_d.add_argument('id', nargs='*', help='S.no(s). of item(s) to be deleted from to-do list.')	
 
 	parser_c = subparsers.add_parser('clear', help = 'Clear to-do list.')
 	
@@ -84,12 +138,14 @@ if __name__ == '__main__':
 	# Initializing variables
 	todoFile = os.path.join(os.environ['HOME'],'.todo.json')
 	todo = {}
-	todo['list'] = []
+	todo['list'] = {}
+	todo['priority'] = {}
+	ids = []
 
 	# Check if todo file exists
 	if os.path.isfile(todoFile) is False:
 		makeBlankTodo()
-
+		
 	# Clear command
 	if args.command == 'clear':
 		makeBlankTodo()
@@ -99,17 +155,28 @@ if __name__ == '__main__':
 		with open(todoFile,'r') as jsonFile:
 			todo = json.load(jsonFile)
 	except:
-		print('Oops! Looks like someone has messed up your todo file. All your existing data will be lost!')
+		print('Awww snap! Looks like someone has messed up your todo file. All your existing data will be lost!')
 		makeBlankTodo()
 
-	# Add an item
+	# Add item(s)
 	if args.command == 'add' and args.item != []:
-		addItem(todoFile, todo, args.item)
+		priority = 4
+		if args.urgent == True:
+			priority -= 2
+		if args.important == True:
+			priority -= 1
+		addItem(todoFile, todo, args.item, priority)
 
-	# Delete an item
-	if args.command == 'del' and args.id > 0:
-		deleteItem(todoFile, todo, args.id)
+	# Get IDs and sort
+	for i in todo['priority']:
+		ids.append((todo['priority'][i],i))
+	ids = sorted(ids, key=lambda x: x[1])
+	ids = sorted(ids, key=lambda x: x[0])
+
+	# Delete item(s)
+	if args.command == 'del' and args.id != []:
+		deleteItem(todoFile, todo, args.id, ids)
 
 	# Supress display after adding/deleting/clearing
 	if args.suppress is None or args.suppress is False:
-		printTodo(todo['list'])
+		printTodo(todo['list'], ids)
