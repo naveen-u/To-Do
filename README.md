@@ -69,7 +69,7 @@ $ todo clear
 - Entries are time-stamped and entries with the same flags (URGENT/IMPORTANT/BOTH) are sorted in order of addition.
 - All entries added in one go will have the same URGENT/IMPORTANT flags and the same tags.
 - The `del` command treats non-numeric, non-dash characters as delimiters. Dashes are treated as delimiters if there aren't                          numbers immediately before and after the dash. For example, `del randomtext1`, `del -1`, `del 1-`, and `del 1` all do the same thing.
-- While displaying the to-do list the `-t` option displays entries which have *all* the tags listed.
+- While displaying the to-do list the `-t` option displays entries which have *any* of the tags listed.
 - While deleting entries using the `-t` option, all entries with *any* of the given tags are deleted.
 
 ## Authors
