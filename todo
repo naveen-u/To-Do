@@ -95,45 +95,24 @@ class LolCat(object):
         return [r, g, b]
 
     def cat(self, fd, options):
-        if options.animate:
-            self.output.write('\x1b[?25l')
-
         for line in fd:
             options.seed += 1
             self.println(line, options)
-
-        if options.animate:
-            self.output.write('\x1b[?25h')
 
     def println(self, s, options):
         s = s.rstrip()
         if options.force or self.output.isatty():
             s = STRIP_ANSI.sub('', s)
 
-        if options.animate:
-            self.println_ani(s, options)
-        else:
-            self.println_plain(s, options)
+        self.println_plain(s, options)
 
         self.output.write('\n')
         self.output.flush()
 
-    def println_ani(self, s, options):
-        if not s:
-            return
-
-        for i in range(1, options.duration):
-            self.output.write('\x1b[%dD' % len(s))
-            # Error is happeneing here
-            self.output.flush()
-            options.seed += options.spread
-            self.println_plain(s, options)
-            time.sleep(1.0 / options.speed)
-
     def println_plain(self, s, options):
         for i, c in enumerate(s if PY3 else s.decode(options.charset_py2, 'replace')):
-            rgb = self.rainbow(options.freq, options.seed + i / options.spread)
-            self.output.write(''.join([self.wrap(self.ansi(rgb)), c if PY3 else c.encode(options.charset_py2, 'replace')]))
+        	rgb = self.rainbow(options.freq, options.seed + i / options.spread)
+        	self.output.write(''.join([self.wrap(self.ansi(rgb)), c if PY3 else c.encode(options.charset_py2, 'replace')]))
 
 def detect_mode(term_hint='xterm-256color'):
     '''
@@ -304,13 +283,10 @@ if __name__ == '__main__':
 	parser_c = subparsers.add_parser('clear', help = 'Clear to-do list.')
 
 	parser_d = subparsers.add_parser('lolcat', help = 'Display message as lolcat',)
-	parser_d.add_argument('--speed', '-sp', help = "Set speed of lolcat animation", type = float, default = 10.0, dest = 'speed')
 	parser_d.add_argument('--seed', '-S', help = "Rainbow seed", type = int, default = 0, dest = 'seed')
 	parser_d.add_argument('--spread', '-p', help = "Rainbow spread", type = float, default = 3.0, dest = 'spread')
-	parser_d.add_argument('--animate', '-a', help = "Enable psychedelics", action = 'store_true', dest = 'animate')
 	parser_d.add_argument('--frequency', '-F', help = "Rainbow frequency", type = float, default = 0.1, dest = 'freq')
 	parser_d.add_argument('--force', '-f', help = "Force colour even when stdout is not a tty", action = 'store_false')
-	parser_d.add_argument('--duration', '-d', help = "Animation Duration", type = int, default = 12, dest = 'duration')
 
 	parser_d.add_argument('-3', action = 'store_const', dest = 'mode', const = 8, help = 'Force 3 bit colour mode')
 	parser_d.add_argument('-4', action = 'store_const', dest = 'mode', const = 16, help = 'Force 4 bit colour mode')
@@ -364,6 +340,8 @@ if __name__ == '__main__':
 	# Supress display after adding/deleting/clearing
 	if args.suppress is None or args.suppress is False:
 		if args.command == 'lolcat':
+			if args.spread == 0.0:
+				args.spread = 3.0
 			args.mode = args.mode or detect_mode()
 			args.seed = random.randint(0, 256) if args.seed == 0 else args.seed
 			printTodo(todo, ids, args.verbose, args.tag_main, args, enable_lolcat=True)
