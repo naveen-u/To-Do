@@ -16,6 +16,142 @@ import os
 import datetime
 import re
 
+import sys
+import time
+import atexit
+import math
+import random
+from signal import signal, SIGPIPE, SIG_DFL
+
+PY3 = sys.version_info >= (3,)
+
+# override default handler so no exceptions on SIGPIPE
+signal(SIGPIPE, SIG_DFL)
+
+# Reset terminal colors at exit
+def reset():
+    sys.stdout.write('\x1b[0m')
+    sys.stdout.flush()
+
+atexit.register(reset)
+
+STRIP_ANSI = re.compile(r'\x1b\[(\d+)(;\d+)?(;\d+)?[m|K]')
+COLOR_ANSI = (
+    (0x00, 0x00, 0x00), (0xcd, 0x00, 0x00),
+    (0x00, 0xcd, 0x00), (0xcd, 0xcd, 0x00),
+    (0x00, 0x00, 0xee), (0xcd, 0x00, 0xcd),
+    (0x00, 0xcd, 0xcd), (0xe5, 0xe5, 0xe5),
+    (0x7f, 0x7f, 0x7f), (0xff, 0x00, 0x00),
+    (0x00, 0xff, 0x00), (0xff, 0xff, 0x00),
+    (0x5c, 0x5c, 0xff), (0xff, 0x00, 0xff),
+    (0x00, 0xff, 0xff), (0xff, 0xff, 0xff),
+)
+
+class LolCat(object):
+    def __init__(self, mode=256, output=sys.stdout):
+        self.mode =mode
+        self.output = output
+
+    def _distance(self, rgb1, rgb2):
+        return sum(map(lambda c: (c[0] - c[1]) ** 2,
+            zip(rgb1, rgb2)))
+
+    def ansi(self, rgb):
+        r, g, b = rgb
+
+        if self.mode in (8, 16):
+            colors = COLOR_ANSI[:self.mode]
+            matches = [(self._distance(c, map(int, rgb)), i) for i, c in enumerate(colors)]
+            matches.sort()
+            color = matches[0][1]
+
+            return '3%d' % (color,)
+        else:
+            gray_possible = True
+            sep = 2.5
+
+            while gray_possible:
+                if r < sep or g < sep or b < sep:
+                    gray = r < sep and g < sep and b < sep
+                    gray_possible = False
+
+                sep += 42.5
+
+            if gray:
+                color = 232 + int(float(sum(rgb) / 33.0))
+            else:
+                color = sum([16]+[int(6 * float(val)/256) * mod
+                    for val, mod in zip(rgb, [36, 6, 1])])
+
+            return '38;5;%d' % (color,)
+
+    def wrap(self, *codes):
+        return '\x1b[%sm' % (''.join(codes),)
+
+    def rainbow(self, freq, i):
+        r = math.sin(freq * i) * 127 + 128
+        g = math.sin(freq * i + 2 * math.pi / 3) * 127 + 128
+        b = math.sin(freq * i + 4 * math.pi / 3) * 127 + 128
+        return [r, g, b]
+
+    def cat(self, fd, options):
+        if options.animate:
+            self.output.write('\x1b[?25l')
+
+        for line in fd:
+            options.seed += 1
+            self.println(line, options)
+
+        if options.animate:
+            self.output.write('\x1b[?25h')
+
+    def println(self, s, options):
+        s = s.rstrip()
+        if options.force or self.output.isatty():
+            s = STRIP_ANSI.sub('', s)
+
+        if options.animate:
+            self.println_ani(s, options)
+        else:
+            self.println_plain(s, options)
+
+        self.output.write('\n')
+        self.output.flush()
+
+    def println_ani(self, s, options):
+        if not s:
+            return
+
+        for i in range(1, options.duration):
+            self.output.write('\x1b[%dD' % len(s))
+            # Error is happeneing here
+            self.output.flush()
+            options.seed += options.spread
+            self.println_plain(s, options)
+            time.sleep(1.0 / options.speed)
+
+    def println_plain(self, s, options):
+        for i, c in enumerate(s if PY3 else s.decode(options.charset_py2, 'replace')):
+            rgb = self.rainbow(options.freq, options.seed + i / options.spread)
+            self.output.write(''.join([self.wrap(self.ansi(rgb)), c if PY3 else c.encode(options.charset_py2, 'replace')]))
+
+def detect_mode(term_hint='xterm-256color'):
+    '''
+    Poor-mans color mode detection.
+    '''
+    if 'ANSICON' in os.environ:
+        return 16
+    elif os.environ.get('ConEmuANSI', 'OFF') == 'ON':
+        return 256
+    else:
+        term = os.environ.get('TERM', term_hint)
+        if term.endswith('-256color') or term in ('xterm', 'screen'):
+            return 256
+        elif term.endswith('-color') or term in ('rxvt',):
+            return 16
+        else:
+            return 256 # optimistic default
+
 def makeBlankTodo():
 	'''
 	Makes an empty to-do list file.
@@ -23,17 +159,15 @@ def makeBlankTodo():
 	with open(todoFile,'w') as file:
 		json.dump(todo,file)
 
-def printTodo(todo, ids, verbose, searchTags):
+def printTodo(todo, ids, verbose, searchTags, options, enable_lolcat=False):
 	'''
 	Prints the todo list.
 	'''
 	print()
-	print("TO-DO LIST".center(os.get_terminal_size().columns))
-	print('='*os.get_terminal_size().columns)
-	print()
+	to_print = "TO-DO LIST".center(os.get_terminal_size().columns) + '\n' + '='*os.get_terminal_size().columns + '\n' + '\n'
 	if len(todo['list']) == 0:
-		print('\tYour todo list is empty!')
-	else :
+		to_print = to_print + '\tYour todo list is empty!\n'
+	else:
 		j = 1
 		for i in ids:
 			skip = False
@@ -46,11 +180,11 @@ def printTodo(todo, ids, verbose, searchTags):
 			if skip:
 				continue
 			if i[0] == 1:
-				s = '    \u2757 \u2B50\t'
+				s = '\u2757 \u2B50\t'
 			elif i[0] == 2:
-				s = '    \u2757\t'
+				s = '\u2757\t'
 			elif i[0] == 3:
-				s = '      \u2B50\t'
+				s = '\u2B50\t'
 			else:
 				s = '\t'
 			s += str(j) + ') '
@@ -58,9 +192,15 @@ def printTodo(todo, ids, verbose, searchTags):
 				s += ', '.join(todo['tags'][i[1]])
 				s += ' : '
 			s += todo['list'][i[1]]
-			print(s)
+			to_print = to_print + s + '\n'
 			j = j+1
-	print('\n')
+
+	if not enable_lolcat:
+		print(to_print)
+	else:
+		lolcat = LolCat(mode=options.mode)
+		to_print_list = to_print.split('\n')
+		lolcat.cat(to_print_list, options)
 
 def addItem(todoFile, todo, item, priority, tags):
 	'''
@@ -162,7 +302,20 @@ if __name__ == '__main__':
 	parser_d.add_argument('--tag', '-t', nargs='*', help = 'Tag(s) to be deleted.', dest = 'tag_del')
 
 	parser_c = subparsers.add_parser('clear', help = 'Clear to-do list.')
-	
+
+	parser_d = subparsers.add_parser('lolcat', help = 'Display message as lolcat',)
+	parser_d.add_argument('--speed', '-sp', help = "Set speed of lolcat animation", type = float, default = 10.0, dest = 'speed')
+	parser_d.add_argument('--seed', '-S', help = "Rainbow seed", type = int, default = 0, dest = 'seed')
+	parser_d.add_argument('--spread', '-p', help = "Rainbow spread", type = float, default = 3.0, dest = 'spread')
+	parser_d.add_argument('--animate', '-a', help = "Enable psychedelics", action = 'store_true', dest = 'animate')
+	parser_d.add_argument('--frequency', '-F', help = "Rainbow frequency", type = float, default = 0.1, dest = 'freq')
+	parser_d.add_argument('--force', '-f', help = "Force colour even when stdout is not a tty", action = 'store_false')
+	parser_d.add_argument('--duration', '-d', help = "Animation Duration", type = int, default = 12, dest = 'duration')
+
+	parser_d.add_argument('-3', action = 'store_const', dest = 'mode', const = 8, help = 'Force 3 bit colour mode')
+	parser_d.add_argument('-4', action = 'store_const', dest = 'mode', const = 16, help = 'Force 4 bit colour mode')
+	parser_d.add_argument('-8', action = 'store_const', dest = 'mode', const = 256, help = 'Force 8 bit colour mode')
+
 	args = parser.parse_args()
 
 	# Initializing variables
@@ -210,4 +363,9 @@ if __name__ == '__main__':
 
 	# Supress display after adding/deleting/clearing
 	if args.suppress is None or args.suppress is False:
-		printTodo(todo, ids, args.verbose, args.tag_main)
+		if args.command == 'lolcat':
+			args.mode = args.mode or detect_mode()
+			args.seed = random.randint(0, 256) if args.seed == 0 else args.seed
+			printTodo(todo, ids, args.verbose, args.tag_main, args, enable_lolcat=True)
+		else:
+			printTodo(todo, ids, args.verbose, args.tag_main, args)
