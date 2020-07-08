@@ -18,7 +18,7 @@ import datetime
 import re
 import random
 
-from lolcat import LolCat, detect_mode
+from lolcat import LolCat
 
 def makeBlankTodo():
 	'''
@@ -27,7 +27,7 @@ def makeBlankTodo():
 	with open(todoFile,'w') as file:
 		json.dump(todo,file)
 
-def printTodo(todo, ids, verbose, searchTags, options, enable_lolcat=False):
+def printTodo(todo, ids, options, enable_lolcat=False):
 	'''
 	Prints the todo list.
 	'''
@@ -36,6 +36,7 @@ def printTodo(todo, ids, verbose, searchTags, options, enable_lolcat=False):
 	if len(todo['list']) == 0:
 		to_print = to_print + '\tYour todo list is empty!\n'
 	else:
+		searchTags = options.tag_main
 		j = 1
 		for i in ids:
 			skip = False
@@ -56,7 +57,7 @@ def printTodo(todo, ids, verbose, searchTags, options, enable_lolcat=False):
 			else:
 				s = '\t'
 			s += str(j) + ') '
-			if verbose and todo['tags'][i[1]] != []:
+			if options.verbose and todo['tags'][i[1]] != []:
 				s += ', '.join(todo['tags'][i[1]])
 				s += ' : '
 			s += todo['list'][i[1]]
@@ -66,9 +67,9 @@ def printTodo(todo, ids, verbose, searchTags, options, enable_lolcat=False):
 	if not enable_lolcat:
 		print(to_print)
 	else:
-		lolcat = LolCat(mode=options.mode)
+		lolcat = LolCat(options)
 		to_print_list = to_print.split('\n')
-		lolcat.cat(to_print_list, options)
+		lolcat.cat(to_print_list)
 
 def addItem(todoFile, todo, item, priority, tags):
 	'''
@@ -165,9 +166,9 @@ if __name__ == '__main__':
 	parser_a.add_argument('--important', '-i', help = "Flag the item as important.", action = 'store_true')
 	parser_a.add_argument('--tag', '-t', nargs='*', help = 'Tag(s) to be added to item(s).', dest = 'tag_add')
 
-	parser_d = subparsers.add_parser('del', help = 'Delete item(s) from to-do list.')
-	parser_d.add_argument('id', nargs='*', help='S.no(s). of item(s) to be deleted from to-do list.')
-	parser_d.add_argument('--tag', '-t', nargs='*', help = 'Tag(s) to be deleted.', dest = 'tag_del')
+	parser_b = subparsers.add_parser('del', help = 'Delete item(s) from to-do list.')
+	parser_b.add_argument('id', nargs='*', help='S.no(s). of item(s) to be deleted from to-do list.')
+	parser_b.add_argument('--tag', '-t', nargs='*', help = 'Tag(s) to be deleted.', dest = 'tag_del')
 
 	parser_c = subparsers.add_parser('clear', help = 'Clear to-do list.')
 
@@ -176,7 +177,6 @@ if __name__ == '__main__':
 	parser_d.add_argument('--spread', '-p', help = "Rainbow spread", type = float, default = 3.0, dest = 'spread')
 	parser_d.add_argument('--frequency', '-F', help = "Rainbow frequency", type = float, default = 0.1, dest = 'freq')
 	parser_d.add_argument('--force', '-f', help = "Force colour even when stdout is not a tty", action = 'store_false')
-
 	parser_d.add_argument('-3', action = 'store_const', dest = 'mode', const = 8, help = 'Force 3 bit colour mode')
 	parser_d.add_argument('-4', action = 'store_const', dest = 'mode', const = 16, help = 'Force 4 bit colour mode')
 	parser_d.add_argument('-8', action = 'store_const', dest = 'mode', const = 256, help = 'Force 8 bit colour mode')
@@ -228,11 +228,4 @@ if __name__ == '__main__':
 
 	# Supress display after adding/deleting/clearing
 	if args.suppress is None or args.suppress is False:
-		if args.command == 'lolcat':
-			if args.spread == 0.0:
-				args.spread = 3.0
-			args.mode = args.mode or detect_mode()
-			args.seed = random.randint(0, 256) if args.seed == 0 else args.seed
-			printTodo(todo, ids, args.verbose, args.tag_main, args, enable_lolcat=True)
-		else:
-			printTodo(todo, ids, args.verbose, args.tag_main, args)
+		printTodo(todo, ids, args, enable_lolcat=(args.command == 'lolcat'))

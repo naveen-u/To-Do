@@ -15,8 +15,6 @@ import sys
 import time
 from signal import signal, SIGPIPE, SIG_DFL
 
-PY3 = sys.version_info >= (3,)
-
 # override default handler so no exceptions on SIGPIPE
 signal(SIGPIPE, SIG_DFL)
 
@@ -40,9 +38,16 @@ COLOR_ANSI = (
 )
 
 class LolCat(object):
-    def __init__(self, mode=256, output=sys.stdout):
-        self.mode =mode
+    def __init__(self, options, output=sys.stdout):
+
+        self.mode = options.mode or self.detect_mode()
+        if options.spread <= 0.0:
+            options.spread = 3.0
+        self.seed = random.randint(0, 256) if options.seed <= 0 else options.seed
         self.output = output
+        self.spread = options.spread
+        self.freq = options.freq
+        self.force = options.force
 
     def _distance(self, rgb1, rgb2):
         return sum(map(lambda c: (c[0] - c[1]) ** 2,
@@ -86,39 +91,39 @@ class LolCat(object):
         b = math.sin(freq * i + 4 * math.pi / 3) * 127 + 128
         return [r, g, b]
 
-    def cat(self, fd, options):
+    def cat(self, fd):
         for line in fd:
-            options.seed += 1
-            self.println(line, options)
+            self.seed += 1
+            self.println(line)
 
-    def println(self, s, options):
+    def println(self, s):
         s = s.rstrip()
-        if options.force or self.output.isatty():
+        if self.force or self.output.isatty():
             s = STRIP_ANSI.sub('', s)
 
-        self.println_plain(s, options)
+        self.println_plain(s)
 
         self.output.write('\n')
         self.output.flush()
 
-    def println_plain(self, s, options):
-        for i, c in enumerate(s if PY3 else s.decode(options.charset_py2, 'replace')):
-        	rgb = self.rainbow(options.freq, options.seed + i / options.spread)
-        	self.output.write(''.join([self.wrap(self.ansi(rgb)), c if PY3 else c.encode(options.charset_py2, 'replace')]))
+    def println_plain(self, s):
+        for i, c in enumerate(s):
+            rgb = self.rainbow(self.freq, self.seed + i / self.spread)
+            self.output.write(''.join([self.wrap(self.ansi(rgb)), c]))
 
-def detect_mode(term_hint='xterm-256color'):
-    '''
-    Poor-mans color mode detection.
-    '''
-    if 'ANSICON' in os.environ:
-        return 16
-    elif os.environ.get('ConEmuANSI', 'OFF') == 'ON':
-        return 256
-    else:
-        term = os.environ.get('TERM', term_hint)
-        if term.endswith('-256color') or term in ('xterm', 'screen'):
-            return 256
-        elif term.endswith('-color') or term in ('rxvt',):
+    def detect_mode(self, term_hint='xterm-256color'):
+        '''
+        Poor-mans color mode detection.
+        '''
+        if 'ANSICON' in os.environ:
             return 16
+        elif os.environ.get('ConEmuANSI', 'OFF') == 'ON':
+            return 256
         else:
-            return 256 # optimistic default
+            term = os.environ.get('TERM', term_hint)
+            if term.endswith('-256color') or term in ('xterm', 'screen'):
+                return 256
+            elif term.endswith('-color') or term in ('rxvt',):
+                return 16
+            else:
+                return 256 # optimistic default
