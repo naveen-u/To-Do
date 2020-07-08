@@ -49,13 +49,13 @@ def printTodo(todo, ids, options, enable_lolcat=False):
 			if skip:
 				continue
 			if i[0] == 1:
-				s = '\u2757 \u2B50\t'
+				s = '\t\u2757 \u2B50\t'
 			elif i[0] == 2:
-				s = '\u2757\t'
+				s = '\t\u2757\t'
 			elif i[0] == 3:
-				s = '\u2B50\t'
+				s = '\t\u2B50\t'
 			else:
-				s = '\t'
+				s = '\t\t'
 			s += str(j) + ') '
 			if options.verbose and todo['tags'][i[1]] != []:
 				s += ', '.join(todo['tags'][i[1]])
