@@ -12,6 +12,7 @@ Python 3.x
 - Tag to-do list items. (Tags are lowercase strings containing no whitespace.) 
 - Search for items with specific tags.
 - Delete items with specific tags.
+- Display the to-do list with an optional LolCat feature
 
 ## Usage
 
@@ -63,6 +64,13 @@ $ todo clear
 ```
 ![image](https://user-images.githubusercontent.com/29832401/42281475-41f90abc-7fc1-11e8-9222-7600690b86b6.png)
 
+* `lolcat` : Displays the to-do list items as lolcat.
+
+```bash
+$ todo lolcat
+```
+[X-insert image here]
+
 ### Notes
 
 - The to-do list is stored in a .JSON file in the home folder.
@@ -75,6 +83,7 @@ $ todo clear
 ## Authors
 
 * **Naveen Unnikrishnan** - [naveen-u](https://github.com/naveen-u)
+* **Swarup N** - [nswarup14](https://github.com/nswarup14)
 
 ## License
 
