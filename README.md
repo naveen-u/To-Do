@@ -69,7 +69,7 @@ $ todo clear
 ```bash
 $ todo lolcat
 ```
-[X-insert image here]
+![todo-lolcat](https://user-images.githubusercontent.com/34597895/87685184-ba267a00-c7a0-11ea-8253-d48fd5eaa40e.png)
 
 ### Notes
 
